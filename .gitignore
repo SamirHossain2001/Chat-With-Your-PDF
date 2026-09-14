@@ -8,3 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+
+.env
+
+# Generated vector store (regenerable from source docs)
+data/vector_store/
