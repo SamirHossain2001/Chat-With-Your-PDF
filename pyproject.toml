@@ -8,9 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "chromadb>=1.5.9",
     "faiss-cpu>=1.15.0",
-    "ipykernel>=7.3.0",
     "langchain>=1.4.0",
     "langchain-community>=0.4.2",
     "langchain-core>=1.6.3",
@@ -19,8 +17,26 @@ dependencies = [
     "pypdf>=6.18.1",
     "python-dotenv>=1.2.3",
     "sentence-transformers>=6.0.1",
+    "streamlit>=1.63.0",
+    "torch>=2.14.0",
     "tqdm>=4.70.1",
 ]
+
+[dependency-groups]
+# Only needed for the Jupyter notebooks, not for the deployed app: uv sync --group notebooks
+notebooks = [
+    "chromadb>=1.5.9",
+    "ipykernel>=7.3.0",
+]
+
+# CPU-only torch: the CUDA build pulls several GB of GPU libraries the app never uses
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
 
 [project.scripts]
 rag = "rag:main"

@@ -1,0 +1,14 @@
+[server]
+maxUploadSize = 25
+# The watcher crawls transformers' lazy modules and floods the logs with torchvision import errors
+fileWatcherType = "none"
+
+[client]
+# Hide the developer "Deploy" button and menu from visitors
+toolbarMode = "minimal"
+
+[theme.light]
+primaryColor = "#4F46E5"
+
+[theme.dark]
+primaryColor = "#818CF8"

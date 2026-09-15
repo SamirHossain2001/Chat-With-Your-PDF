@@ -5,6 +5,18 @@ from langchain_community.document_loaders import Docx2txtLoader
 from langchain_community.document_loaders.excel import UnstructuredExcelLoader
 from langchain_community.document_loaders import JSONLoader
 
+def load_pdf(path: str, source_name: str = None) -> List[Any]:
+    """
+    Load a single PDF into LangChain documents (one per page).
+    source_name overrides metadata["source"], e.g. the original upload filename.
+    """
+    documents = PyPDFLoader(str(path)).load()
+    if source_name:
+        for doc in documents:
+            doc.metadata["source"] = source_name
+    print(f"[DEBUG] Loaded {len(documents)} PDF pages from {source_name or path}")
+    return documents
+
 def load_all_documents(data_dir: str) -> List[Any]:
     """
     Load all supported files from the data directory and convert to LangChain document structure.

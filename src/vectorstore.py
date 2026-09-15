@@ -2,31 +2,43 @@ import os
 import faiss
 import numpy as np
 import pickle
-from typing import List, Any
+from typing import List, Any, Optional
 from sentence_transformers import SentenceTransformer
 from src.embedding import EmbeddingPipeline
 
 class FaissVectorStore:
-    def __init__(self, persist_dir: str = "faiss_store", embedding_model: str = "all-MiniLM-L6-v2", chunk_size: int = 1000, chunk_overlap: int = 200):
+    def __init__(self, persist_dir: Optional[str] = "faiss_store", embedding_model: str = "all-MiniLM-L6-v2", chunk_size: int = 1000, chunk_overlap: int = 200, model: SentenceTransformer = None):
+        # persist_dir=None keeps the index in memory only (used for per-session uploads)
         self.persist_dir = persist_dir
-        os.makedirs(self.persist_dir, exist_ok=True)
+        if self.persist_dir:
+            os.makedirs(self.persist_dir, exist_ok=True)
         self.index = None
         self.metadata = []
         self.embedding_model = embedding_model
-        self.model = SentenceTransformer(embedding_model)
+        self.model = model if model is not None else SentenceTransformer(embedding_model)
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         print(f"[INFO] Loaded embedding model: {embedding_model}")
 
     def build_from_documents(self, documents: List[Any]):
         print(f"[INFO] Building vector store from {len(documents)} raw documents...")
-        emb_pipe = EmbeddingPipeline(model_name=self.embedding_model, chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap)
+        emb_pipe = EmbeddingPipeline(model_name=self.embedding_model, chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap, model=self.model)
         chunks = emb_pipe.chunk_documents(documents)
+        if not chunks:
+            raise ValueError("No text could be extracted from the documents.")
         embeddings = emb_pipe.embed_chunks(chunks)
-        metadatas = [{"text": chunk.page_content} for chunk in chunks]
+        metadatas = [
+            {
+                "text": chunk.page_content,
+                "source": os.path.basename(str(chunk.metadata.get("source", ""))),
+                "page": chunk.metadata.get("page"),
+            }
+            for chunk in chunks
+        ]
         self.add_embeddings(np.array(embeddings).astype('float32'), metadatas)
-        self.save()
-        print(f"[INFO] Vector store built and saved to {self.persist_dir}")
+        if self.persist_dir:
+            self.save()
+            print(f"[INFO] Vector store built and saved to {self.persist_dir}")
 
     def add_embeddings(self, embeddings: np.ndarray, metadatas: List[Any] = None):
         dim = embeddings.shape[1]
@@ -57,6 +69,9 @@ class FaissVectorStore:
         D, I = self.index.search(query_embedding, top_k)
         results = []
         for idx, dist in zip(I[0], D[0]):
+            # FAISS returns -1 when top_k exceeds the number of stored vectors
+            if idx < 0:
+                continue
             meta = self.metadata[idx] if idx < len(self.metadata) else None
             results.append({"index": idx, "distance": dist, "metadata": meta})
         return results
@@ -68,7 +83,7 @@ class FaissVectorStore:
 
 # Example usage
 if __name__ == "__main__":
-    from data_loader import load_all_documents
+    from src.data_loader import load_all_documents
     docs = load_all_documents("data")
     store = FaissVectorStore("faiss_store")
     store.build_from_documents(docs)

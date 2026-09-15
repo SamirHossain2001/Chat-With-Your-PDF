@@ -13,3 +13,7 @@ wheels/
 
 # Generated vector store (regenerable from source docs)
 data/vector_store/
+faiss_store/
+
+# Streamlit secrets
+.streamlit/secrets.toml
