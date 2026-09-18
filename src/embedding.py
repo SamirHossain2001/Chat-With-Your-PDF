@@ -1,40 +1,50 @@
-from typing import List, Any
+import logging
+from typing import Any, List
+
+import numpy as np
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
-import numpy as np
-from src.data_loader import load_all_documents
+
+from src.config import settings
+
+logger = logging.getLogger(__name__)
+
 
 class EmbeddingPipeline:
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2", chunk_size: int = 1000, chunk_overlap: int = 200, model: SentenceTransformer = None):
+    def __init__(
+        self,
+        model_name: str = settings.embedding_model,
+        chunk_size: int = settings.chunk_size,
+        chunk_overlap: int = settings.chunk_overlap,
+        model: SentenceTransformer = None,
+    ):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        if model is not None:
-            self.model = model
-        else:
-            self.model = SentenceTransformer(model_name)
-            print(f"[INFO] Loaded embedding model: {model_name}")
+        self.model = model if model is not None else SentenceTransformer(model_name)
 
     def chunk_documents(self, documents: List[Any]) -> List[Any]:
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
             length_function=len,
-            separators=["\n\n", "\n", " ", ""]
+            separators=["\n\n", "\n", " ", ""],
         )
         chunks = splitter.split_documents(documents)
-        print(f"[INFO] Split {len(documents)} documents into {len(chunks)} chunks.")
+        logger.info("Split %d documents into %d chunks.", len(documents), len(chunks))
         return chunks
 
     def embed_chunks(self, chunks: List[Any]) -> np.ndarray:
         texts = [chunk.page_content for chunk in chunks]
-        print(f"[INFO] Generating embeddings for {len(texts)} chunks...")
-        embeddings = self.model.encode(texts, show_progress_bar=True)
-        print(f"[INFO] Embeddings shape: {embeddings.shape}")
-        return embeddings
+        logger.info("Generating embeddings for %d chunks...", len(texts))
+        # normalize_embeddings=True -> unit vectors so cosine similarity works with inner product
+        return self.model.encode(texts, normalize_embeddings=True)
+
 
 # Example usage
 if __name__ == "__main__":
+    from src.data_loader import load_all_documents
 
+    logging.basicConfig(level=logging.INFO)
     docs = load_all_documents("data")
     emb_pipe = EmbeddingPipeline()
     chunks = emb_pipe.chunk_documents(docs)

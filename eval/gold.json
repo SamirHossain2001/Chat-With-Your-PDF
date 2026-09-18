@@ -1,0 +1,26 @@
+[
+  {
+    "question": "What is the name of the model architecture introduced in the paper?",
+    "keywords": ["Transformer"]
+  },
+  {
+    "question": "What mechanism does the model rely on instead of recurrence or convolution?",
+    "keywords": ["attention", "self-attention"]
+  },
+  {
+    "question": "What is the attention function called?",
+    "keywords": ["Scaled Dot-Product Attention", "dot-product"]
+  },
+  {
+    "question": "How does the model use multiple attention heads?",
+    "keywords": ["multi-head", "heads"]
+  },
+  {
+    "question": "How is order information about tokens added to the model?",
+    "keywords": ["positional encoding", "sinusoid"]
+  },
+  {
+    "question": "What dataset and task were used to evaluate translation quality?",
+    "keywords": ["WMT", "BLEU", "translation"]
+  }
+]

@@ -5,18 +5,18 @@ import tempfile
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import CrossEncoder, SentenceTransformer
 
+from src.config import settings
 from src.data_loader import load_pdf
 from src.search import RAGSearch
 from src.vectorstore import FaissVectorStore
 
 load_dotenv()
 
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-LLM_MODEL = "qwen/qwen3.8-27b"
+EMBEDDING_MODEL = settings.embedding_model
 # Every question costs Groq quota on the owner's API key, so cap it per browser session
-MAX_QUESTIONS_PER_SESSION = 30
+MAX_QUESTIONS_PER_SESSION = settings.max_questions_per_session
 SUGGESTED_QUESTIONS = [
     "Summarize this document",
     "What are the key points?",
@@ -46,6 +46,12 @@ def get_embedding_model():
     return SentenceTransformer(EMBEDDING_MODEL)
 
 
+@st.cache_resource(show_spinner="Loading the reranker (first visit only)...")
+def get_reranker():
+    # Cross-encoder that reorders candidates for much better precision; CPU-friendly
+    return CrossEncoder(settings.reranker_model)
+
+
 @st.cache_resource
 def get_llm():
     api_key = os.getenv("GROQ_API_KEY")
@@ -57,7 +63,7 @@ def get_llm():
     if not api_key:
         st.error("This app isn't configured yet: GROQ_API_KEY is missing. Add it to .env or the Streamlit secrets.")
         st.stop()
-    return ChatGroq(groq_api_key=api_key, model_name=LLM_MODEL)
+    return ChatGroq(groq_api_key=api_key, model_name=settings.llm_model)
 
 
 def reset_documents():
@@ -87,7 +93,7 @@ def build_rag(uploaded_files):
         "pages": len(documents),
         "chunks": len(store.metadata),
     }
-    return RAGSearch(vectorstore=store, llm=get_llm()), doc_info
+    return RAGSearch(vectorstore=store, llm=get_llm(), reranker=get_reranker()), doc_info
 
 
 def friendly_error(e: Exception) -> str:
@@ -219,7 +225,8 @@ typed = st.chat_input(
 query = typed or pending
 
 if query and not limit_reached:
-    st.session_state.questions_asked += 1
+    # History for condensation is the conversation *before* this new question
+    prior = list(st.session_state.messages)
     st.session_state.messages.append({"role": "user", "content": query})
     with st.chat_message("user", avatar=USER_AVATAR):
         st.markdown(query)
@@ -227,14 +234,20 @@ if query and not limit_reached:
     rag = st.session_state.rag
     with st.chat_message("assistant", avatar=BOT_AVATAR):
         sources = []
+        answered = False
         try:
             with st.spinner("Searching the document..."):
-                sources = rag.retrieve(query, top_k=5)
+                standalone = rag.condense_question(query, prior)
+                sources = rag.retrieve(standalone)
             if sources:
                 answer = st.write_stream(rag.stream_answer(query, sources))
+                if not answer:
+                    answer = "I couldn't find that in the document."
+                    st.markdown(answer)
             else:
                 answer = "I couldn't find anything relevant in the document."
                 st.markdown(answer)
+            answered = True
         except Exception as e:
             answer = friendly_error(e)
             sources = []
@@ -242,6 +255,9 @@ if query and not limit_reached:
         render_sources(sources)
 
     st.session_state.messages.append({"role": "assistant", "content": answer, "sources": sources})
+    if answered:
+        # Only successful answers count against the session quota
+        st.session_state.questions_asked += 1
     if pending:
         # Clear the selected suggestion so the pills disappear on the next run
         st.rerun()

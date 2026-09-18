@@ -1,7 +1,7 @@
 [project]
 name = "rag"
 version = "0.1.0"
-description = "Add your description here"
+description = "Chat with your PDF — a Streamlit RAG app with reranked retrieval and cited answers"
 readme = "README.md"
 authors = [
     { name = "SamirHossain2001", email = "2001samirhossain@gmail.com" }
@@ -13,6 +13,7 @@ dependencies = [
     "langchain-community>=0.4.2",
     "langchain-core>=1.6.3",
     "langchain-groq>=1.1.3",
+    "pydantic-settings>=2.15.0",
     "pymupdf>=1.28.2",
     "pypdf>=6.18.1",
     "python-dotenv>=1.2.3",
