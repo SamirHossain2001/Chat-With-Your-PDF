@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     retrieve_candidates: int = 20
     top_k: int = 5
 
+    # Abstain if the best reranked passage scores below this (cross-encoder logit).
+    # Measured: in-document questions score ~+6, off-topic ones ~-10.
+    min_rerank_score: float = -4.0
+
     # Per-session question cap (protects the owner's shared Groq quota)
     max_questions_per_session: int = 30
 

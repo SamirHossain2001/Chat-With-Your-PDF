@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 
 from langchain_groq import ChatGroq
 
@@ -7,6 +8,13 @@ from src.config import settings
 from src.vectorstore import FaissVectorStore
 
 logger = logging.getLogger(__name__)
+
+MAX_RETRIES = 3  # for transient Groq rate-limit (429) errors
+
+
+def _is_rate_limit(err: Exception) -> bool:
+    text = str(err).lower()
+    return "rate limit" in text or "429" in text
 
 ANSWER_PROMPT = """You are a helpful assistant answering questions about the user's uploaded documents.
 
@@ -63,30 +71,47 @@ class RAGSearch:
         else:
             self.llm = ChatGroq(groq_api_key=os.getenv("GROQ_API_KEY"), model_name=llm_model)
 
+    def _invoke(self, prompt: str) -> str:
+        """LLM call with backoff retries on transient rate-limit errors."""
+        for attempt in range(MAX_RETRIES):
+            try:
+                return self.llm.invoke([prompt]).content
+            except Exception as e:
+                if not _is_rate_limit(e) or attempt == MAX_RETRIES - 1:
+                    raise
+                time.sleep(2 * (attempt + 1))
+
     def condense_question(self, question: str, history: list = None) -> str:
         """Rewrite a follow-up into a standalone query using recent chat history."""
         if not history:
             return question
         convo = "\n".join(f"{m['role']}: {m['content']}" for m in history[-4:])
         try:
-            rewritten = self.llm.invoke([CONDENSE_PROMPT.format(history=convo, question=question)])
-            return (rewritten.content or question).strip()
+            rewritten = self._invoke(CONDENSE_PROMPT.format(history=convo, question=question))
+            return (rewritten or question).strip()
         except Exception:  # never let condensation break retrieval
             return question
 
-    def _rerank(self, query: str, metas: list, top_k: int) -> list:
+    def _rerank(self, query: str, metas: list) -> list:
+        """Return (meta, score) pairs sorted by cross-encoder relevance, best first."""
         if not self.reranker or not metas:
-            return metas[:top_k]
+            return [(m, None) for m in metas]
         scores = self.reranker.predict([(query, m.get("text", "")) for m in metas])
-        ranked = sorted(zip(metas, scores), key=lambda pair: pair[1], reverse=True)
-        return [meta for meta, _ in ranked[:top_k]]
+        return sorted(zip(metas, scores), key=lambda pair: pair[1], reverse=True)
 
     def retrieve(self, query: str, top_k: int = None) -> list:
-        """Fetch a wide candidate set by vector similarity, then rerank down to top_k."""
+        """Fetch a wide candidate set by vector similarity, then rerank down to top_k.
+
+        Returns [] when the best passage is below the relevance threshold, so the app
+        abstains instead of answering from irrelevant context.
+        """
         top_k = top_k or settings.top_k
         results = self.vectorstore.query(query, top_k=settings.retrieve_candidates)
         metas = [r["metadata"] for r in results if r["metadata"]]
-        return self._rerank(query, metas, top_k)
+        ranked = self._rerank(query, metas)
+        if ranked and ranked[0][1] is not None and ranked[0][1] < settings.min_rerank_score:
+            return []
+        return [meta for meta, _ in ranked[:top_k]]
 
     def _build_prompt(self, query: str, sources: list) -> str:
         blocks = []
@@ -97,17 +122,26 @@ class RAGSearch:
         return ANSWER_PROMPT.format(context="\n\n".join(blocks), query=query)
 
     def stream_answer(self, query: str, sources: list):
-        """Yield the answer text piece by piece as the LLM generates it."""
-        for chunk in self.llm.stream([self._build_prompt(query, sources)]):
-            if chunk.content:
-                yield chunk.content
+        """Yield the answer piece by piece, retrying rate-limits before the first token."""
+        prompt = self._build_prompt(query, sources)
+        for attempt in range(MAX_RETRIES):
+            produced = False
+            try:
+                for chunk in self.llm.stream([prompt]):
+                    if chunk.content:
+                        produced = True
+                        yield chunk.content
+                return
+            except Exception as e:
+                if produced or not _is_rate_limit(e) or attempt == MAX_RETRIES - 1:
+                    raise
+                time.sleep(2 * (attempt + 1))
 
     def answer(self, query: str, top_k: int = None) -> dict:
         sources = self.retrieve(query, top_k=top_k)
         if not sources:
             return {"answer": "I couldn't find that in the document.", "sources": []}
-        response = self.llm.invoke([self._build_prompt(query, sources)])
-        return {"answer": response.content, "sources": sources}
+        return {"answer": self._invoke(self._build_prompt(query, sources)), "sources": sources}
 
 
 # Example usage
