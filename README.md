@@ -2,15 +2,15 @@
 
 Upload a PDF, ask questions, and get answers grounded in your document — with the source pages cited. A simple RAG app: local embeddings (SentenceTransformers) + FAISS search + a Groq-hosted LLM.
 
-**▶️ Live demo: [very-simple-rag.streamlit.app](https://very-simple-rag.streamlit.app/)**
+**▶️ Live demo: [chat-with-your-pdf.streamlit.app](https://chat-with-your-pdf.streamlit.app/)**
 
 ## Run locally
 
 Requires Python 3.12+ and a free [Groq API key](https://console.groq.com).
 
 ```bash
-git clone https://github.com/SamirHossain2001/Traditional-RAG.git
-cd Traditional-RAG
+git clone https://github.com/SamirHossain2001/Chat-With-Your-PDF.git
+cd Chat-With-Your-PDF
 
 pip install -r requirements.txt      # or: uv sync
 
