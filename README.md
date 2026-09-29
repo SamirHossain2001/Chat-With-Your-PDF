@@ -8,7 +8,7 @@ Upload a PDF, ask questions about it, and get answers that cite the pages they c
 
 **Live demo: [chat-with-your-pdf0.streamlit.app](https://chat-with-your-pdf0.streamlit.app/)**
 
-<!-- TODO: add a screenshot of the app, e.g. assets/screenshot.png -->
+![Chat with your PDF: upload a PDF, ask a question, check the cited pages](assets/screenshot.png)
 
 ## Features
 
