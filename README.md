@@ -2,7 +2,7 @@
 
 Upload a PDF, ask questions, and get answers grounded in your document — with the source pages cited. A simple RAG app: local embeddings (SentenceTransformers) + FAISS search + a Groq-hosted LLM.
 
-**▶️ Live demo: [chat-with-your-pdf.streamlit.app](https://chat-with-your-pdf.streamlit.app/)**
+**▶️ Live demo: [chat-with-your-pdf0.streamlit.app](https://chat-with-your-pdf0.streamlit.app/)**
 
 ## Run locally
 
